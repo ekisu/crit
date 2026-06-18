@@ -9,10 +9,11 @@ import (
 	"time"
 )
 
-// OpenBrowser launches the system default browser for url.
-func OpenBrowser(url string) {
+// OpenBrowserWithCommand launches url with the configured opener before falling
+// back to platform defaults.
+func OpenBrowserWithCommand(url, openCmd string) {
 	time.Sleep(200 * time.Millisecond)
-	if tryOpenBrowser(browserCommandSpecs(runtime.GOOS, url, systemIsWSL(), commandExists), runBrowserCommand) {
+	if tryOpenBrowser(browserCommandSpecs(runtime.GOOS, url, strings.TrimSpace(openCmd), systemIsWSL(), commandExists), runBrowserCommand) {
 		return
 	}
 	fmt.Fprintf(os.Stderr, "Warning: could not open browser automatically; open %s manually\n", url)
@@ -36,19 +37,19 @@ func runBrowserCommand(spec browserCommandSpec) error {
 	return exec.Command(spec.name, spec.args...).Run()
 }
 
-func browserCommandSpecs(goos, url string, isWSL bool, hasCommand func(string) bool) []browserCommandSpec {
+func browserCommandSpecs(goos, url, custom string, isWSL bool, hasCommand func(string) bool) []browserCommandSpec {
+	specs := customBrowserCommandSpecs(url, custom)
 	switch goos {
 	case "darwin":
-		return []browserCommandSpec{{name: "open", args: []string{url}}}
+		return append(specs, browserCommandSpec{name: "open", args: []string{url}})
 	case "windows":
 		// rundll32 url.dll is the most reliable way to open the default
 		// browser on every supported Windows version. cmd /c start works too
 		// but requires careful quoting around URLs containing & or %.
-		return []browserCommandSpec{
-			{name: "rundll32", args: []string{"url.dll,FileProtocolHandler", url}},
-		}
+		return append(specs,
+			browserCommandSpec{name: "rundll32", args: []string{"url.dll,FileProtocolHandler", url}},
+		)
 	case "linux":
-		var specs []browserCommandSpec
 		if isWSL {
 			if hasCommand("wslview") {
 				specs = append(specs, browserCommandSpec{name: "wslview", args: []string{url}})
@@ -76,8 +77,16 @@ func browserCommandSpecs(goos, url string, isWSL bool, hasCommand func(string) b
 		}
 		return specs
 	default:
+		return specs
+	}
+}
+
+func customBrowserCommandSpecs(url, custom string) []browserCommandSpec {
+	custom = strings.TrimSpace(custom)
+	if custom == "" {
 		return nil
 	}
+	return []browserCommandSpec{{name: custom, args: []string{url}}}
 }
 
 func powershellSingleQuote(s string) string {

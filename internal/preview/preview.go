@@ -39,7 +39,7 @@ func LooksLikePreviewArgs(args []string) bool {
 	return !info.IsDir()
 }
 
-func connectToPreviewDaemon(key string, noOpen bool) bool {
+func connectToPreviewDaemon(key string, noOpen bool, openCmd string) bool {
 	entry, alive := daemon.FindAliveSession(key)
 	if !alive {
 		return false
@@ -47,7 +47,7 @@ func connectToPreviewDaemon(key string, noOpen bool) bool {
 	fmt.Fprintf(os.Stderr, "[crit] connected to preview daemon at %s\n", entry.BaseURL())
 	fmt.Fprintf(os.Stderr, "[crit] open %s/preview\n", entry.BaseURL())
 	if !noOpen && !daemon.DaemonHasBrowser(entry) {
-		go browser.OpenBrowser(entry.BaseURL() + "/preview")
+		go browser.OpenBrowserWithCommand(entry.BaseURL()+"/preview", openCmd)
 	}
 	daemon.RunReviewClient(entry, key)
 	return true
@@ -99,7 +99,7 @@ func RunPreview(args []string) {
 	}
 
 	key := PreviewSessionKey(cwd, absPath)
-	if connectToPreviewDaemon(key, noOpenResolved) {
+	if connectToPreviewDaemon(key, noOpenResolved, cfg.OpenCmd) {
 		return
 	}
 
@@ -123,7 +123,7 @@ func RunPreview(args []string) {
 	installDaemonSignalHandler(entry.PID)
 
 	if !noOpenResolved {
-		go browser.OpenBrowser(entry.BaseURL() + "/preview")
+		go browser.OpenBrowserWithCommand(entry.BaseURL()+"/preview", cfg.OpenCmd)
 	}
 
 	daemon.RunReviewClient(entry, key)

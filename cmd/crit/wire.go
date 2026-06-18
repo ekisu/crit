@@ -47,7 +47,7 @@ var (
 	signalReadiness   = daemon.SignalReadiness
 	hostForDisplay    = daemon.HostForDisplay
 	shutdownSignals   = daemon.ShutdownSignals
-	openBrowser       = browser.OpenBrowser
+	openBrowser       = browser.OpenBrowserWithCommand
 
 	reviewPathsFor = session.ReviewPathsFor
 	detectPRInfo   = github.DetectPRInfo
@@ -91,6 +91,7 @@ func init() {
 			Focus:              sc.Focus,
 			PlanDir:            sc.PlanDir,
 			NoOpen:             sc.NoOpen,
+			OpenCmd:            sc.OpenCmd,
 			NoIntegrationCheck: sc.NoIntegrationCheck,
 			VCSOverride:        sc.VCSOverride,
 			BaseBranch:         sc.BaseBranch,

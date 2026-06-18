@@ -82,7 +82,7 @@ func runAuthLogin(args []string) {
 
 	fmt.Fprintf(os.Stderr, "\n  Opening browser to sign in...\n")
 	fmt.Fprintf(os.Stderr, "  If it doesn't open, visit: %s\n\n", code.VerificationURIComplete)
-	go browser.OpenBrowser(code.VerificationURIComplete)
+	go browser.OpenBrowserWithCommand(code.VerificationURIComplete, cfg.OpenCmd)
 
 	token, err := pollForToken(serverURL, code)
 	if err != nil {

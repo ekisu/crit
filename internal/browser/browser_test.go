@@ -38,7 +38,7 @@ func TestBrowserCommandSpecs(t *testing.T) {
 	url := "http://localhost:1234?a=1&b=2"
 
 	t.Run("wsl prefers windows-aware launchers before xdg-open", func(t *testing.T) {
-		specs := browserCommandSpecs("linux", url, true, func(name string) bool {
+		specs := browserCommandSpecs("linux", url, "", true, func(name string) bool {
 			switch name {
 			case "wslview", "cmd.exe", "powershell.exe", "xdg-open":
 				return true
@@ -59,7 +59,7 @@ func TestBrowserCommandSpecs(t *testing.T) {
 	})
 
 	t.Run("plain linux uses xdg-open", func(t *testing.T) {
-		specs := browserCommandSpecs("linux", url, false, func(name string) bool {
+		specs := browserCommandSpecs("linux", url, "", false, func(name string) bool {
 			return name == "xdg-open"
 		})
 
@@ -70,15 +70,51 @@ func TestBrowserCommandSpecs(t *testing.T) {
 	})
 
 	t.Run("missing launcher returns no commands", func(t *testing.T) {
-		specs := browserCommandSpecs("linux", url, false, func(string) bool { return false })
+		specs := browserCommandSpecs("linux", url, "", false, func(string) bool { return false })
 		if len(specs) != 0 {
 			t.Fatalf("expected no commands, got %#v", specs)
 		}
 	})
 
 	t.Run("darwin uses open", func(t *testing.T) {
-		specs := browserCommandSpecs("darwin", url, false, func(string) bool { return false })
+		specs := browserCommandSpecs("darwin", url, "", false, func(string) bool { return false })
 		want := []browserCommandSpec{{name: "open", args: []string{url}}}
+		if !reflect.DeepEqual(specs, want) {
+			t.Fatalf("browserCommandSpecs() = %#v, want %#v", specs, want)
+		}
+	})
+
+	t.Run("custom linux browser is tried before xdg-open", func(t *testing.T) {
+		specs := browserCommandSpecs("linux", url, "/usr/local/bin/open-local", false, func(name string) bool {
+			return name == "xdg-open"
+		})
+
+		want := []browserCommandSpec{
+			{name: "/usr/local/bin/open-local", args: []string{url}},
+			{name: "xdg-open", args: []string{url}},
+		}
+		if !reflect.DeepEqual(specs, want) {
+			t.Fatalf("browserCommandSpecs() = %#v, want %#v", specs, want)
+		}
+	})
+
+	t.Run("custom mac command is executed directly", func(t *testing.T) {
+		specs := browserCommandSpecs("darwin", url, "open-local", false, func(string) bool { return false })
+		want := []browserCommandSpec{
+			{name: "open-local", args: []string{url}},
+			{name: "open", args: []string{url}},
+		}
+		if !reflect.DeepEqual(specs, want) {
+			t.Fatalf("browserCommandSpecs() = %#v, want %#v", specs, want)
+		}
+	})
+
+	t.Run("custom mac script path is executed directly", func(t *testing.T) {
+		specs := browserCommandSpecs("darwin", url, "/usr/local/bin/open-local", false, func(string) bool { return false })
+		want := []browserCommandSpec{
+			{name: "/usr/local/bin/open-local", args: []string{url}},
+			{name: "open", args: []string{url}},
+		}
 		if !reflect.DeepEqual(specs, want) {
 			t.Fatalf("browserCommandSpecs() = %#v, want %#v", specs, want)
 		}

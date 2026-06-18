@@ -20,12 +20,12 @@ func mustGetwd() string {
 
 // connectOrStartDaemon finds an alive session or starts a new daemon.
 // Returns the session entry, whether we started a new daemon, and any error.
-func connectOrStartDaemon(key string, args []string, noOpen bool) (daemon.SessionEntry, bool, error) {
+func connectOrStartDaemon(key string, args []string, noOpen bool, openCmd string) (daemon.SessionEntry, bool, error) {
 	entry, alive := daemon.FindAliveSession(key)
 	if alive {
 		fmt.Fprintf(os.Stderr, "Connected to crit daemon at %s\n", entry.BaseURL())
 		if !noOpen && !daemon.DaemonHasBrowser(entry) {
-			go browser.OpenBrowser(entry.BaseURL())
+			go browser.OpenBrowserWithCommand(entry.BaseURL(), openCmd)
 		}
 		return entry, false, nil
 	}

@@ -23,6 +23,7 @@ type Config struct {
 	Port               int      `json:"port,omitempty"`
 	Host               string   `json:"host,omitempty"` // listen host (default 127.0.0.1)
 	NoOpen             bool     `json:"no_open,omitempty"`
+	OpenCmd            string   `json:"open_cmd,omitempty"`
 	ShareURL           string   `json:"share_url,omitempty"`
 	ProxyAuth          bool     `json:"proxy_auth,omitempty"`
 	Quiet              bool     `json:"quiet,omitempty"`
@@ -87,6 +88,7 @@ func defaultConfig() generatedConfig {
 		Port:       0,
 		Host:       "127.0.0.1",
 		NoOpen:     false,
+		OpenCmd:    "",
 		ShareURL:   "https://crit.md",
 		ProxyAuth:  false,
 		Quiet:      false,
@@ -113,6 +115,7 @@ type generatedConfig struct {
 	Port               int      `json:"port"`
 	Host               string   `json:"host"`
 	NoOpen             bool     `json:"no_open"`
+	OpenCmd            string   `json:"open_cmd"`
 	ShareURL           string   `json:"share_url"`
 	ProxyAuth          bool     `json:"proxy_auth"`
 	Quiet              bool     `json:"quiet"`
@@ -240,9 +243,10 @@ func mergeConfigs(global, project Config, projectPresence ConfigPresence) Config
 	if project.LiveCookieFile != "" {
 		merged.LiveCookieFile = project.LiveCookieFile
 	}
-	// Security: agent_cmd, auth_token, share_url, and proxy_auth are intentionally
+	// Security: agent_cmd, auth_token, share_url, proxy_auth, and open_cmd are intentionally
 	// NOT merged from project config. They must remain global-only: agent_cmd to
-	// prevent untrusted repos from hijacking the agent command; auth_token and
+	// prevent untrusted repos from hijacking the agent command; open_cmd to prevent
+	// untrusted repos from hijacking browser launches; auth_token and
 	// share_url to prevent a malicious repo's .crit.config.json from redirecting
 	// share requests (and the bearer token) to an attacker-controlled host;
 	// proxy_auth to prevent a repo from silently changing the transport mode.

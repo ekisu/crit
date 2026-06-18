@@ -24,6 +24,7 @@ type DaemonCLIConfig struct {
 	Port               int
 	Host               string
 	NoOpen             bool
+	OpenCmd            string
 	Quiet              bool
 	ShareURL           string
 	ProxyAuth          bool
@@ -213,6 +214,7 @@ func ResolveDaemonCLIConfig(args []string) (*DaemonCLIConfig, error) {
 		Port:               sf.port,
 		Host:               sf.host,
 		NoOpen:             sf.noOpen,
+		OpenCmd:            cfg.OpenCmd,
 		Quiet:              sf.quiet,
 		ShareURL:           sf.shareURL,
 		ProxyAuth:          sf.proxyAuth,

@@ -205,7 +205,7 @@ func runServe(args []string) {
 		} else if sc.PreviewFile != "" {
 			openURL = fmt.Sprintf("http://%s:%d/preview", dh, addr.Port)
 		}
-		go openBrowser(openURL)
+		go openBrowser(openURL, sc.OpenCmd)
 	}
 
 	srv.PrimePRListCache(ctx)

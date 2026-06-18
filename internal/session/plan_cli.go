@@ -123,15 +123,16 @@ func RunPlan(args []string) error {
 	key := PlanSessionKey(cwd, slug)
 	currentPath := filepath.Join(storageDir, "current.md")
 	cfg := config.LoadConfig(cwd)
+	noOpenResolved := pc.noOpen || cfg.NoOpen
 	daemonArgs := BuildPlanDaemonArgs(currentPath, storageDir, slug, PlanDaemonFlags{
 		Port:     config.ResolvePort(pc.port, cfg.Port),
 		Host:     config.ResolveHost(pc.host, cfg.Host),
-		NoOpen:   pc.noOpen || cfg.NoOpen,
+		NoOpen:   noOpenResolved,
 		Quiet:    pc.quiet || cfg.Quiet,
 		ShareURL: config.ResolveShareURL(pc.shareURL, cfg, ""),
 	})
 
-	entry, weStartedDaemon, err := connectOrStartDaemon(key, daemonArgs, pc.noOpen)
+	entry, weStartedDaemon, err := connectOrStartDaemon(key, daemonArgs, noOpenResolved, cfg.OpenCmd)
 	if err != nil {
 		return err
 	}
@@ -231,6 +232,7 @@ func runPlanReviewHook(logPrefix, sessionID string, content []byte, emitDecision
 	fmt.Fprintf(os.Stderr, "%s: plan '%s' saved as v%03d\n", logPrefix, slug, ver)
 
 	cwd, _ := daemon.ResolvedCWD()
+	cfg := config.LoadConfig(cwd)
 	key := PlanSessionKey(cwd, slug)
 	currentPath := filepath.Join(storageDir, "current.md")
 	daemonArgs := BuildPlanDaemonArgs(currentPath, storageDir, slug, PlanDaemonFlags{})
@@ -241,7 +243,7 @@ func runPlanReviewHook(logPrefix, sessionID string, content []byte, emitDecision
 	if alive {
 		fmt.Fprintf(os.Stderr, "%s: connected to daemon at %s\n", logPrefix, entry.BaseURL())
 		if !daemon.DaemonHasBrowser(entry) {
-			go browser.OpenBrowser(entry.BaseURL())
+			go browser.OpenBrowserWithCommand(entry.BaseURL(), cfg.OpenCmd)
 		}
 	} else {
 		entry, err = daemon.StartDaemon(key, daemonArgs)
@@ -260,7 +262,7 @@ func runPlanReviewHook(logPrefix, sessionID string, content []byte, emitDecision
 
 	approved, prompt := daemon.RunReviewClientRaw(entry, key)
 	killDaemonOnApproval(approved, entry.PID)
-	cleanupOnApproval(approved, entry.ReviewPath, config.LoadConfig(cwd).CleanupOnApproveEnabled())
+	cleanupOnApproval(approved, entry.ReviewPath, cfg.CleanupOnApproveEnabled())
 	emitDecision(approved, prompt)
 }
 

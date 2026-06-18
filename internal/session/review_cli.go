@@ -41,7 +41,7 @@ func RunReview(args []string) error {
 	if alive {
 		fmt.Fprintf(os.Stderr, "Connected to crit daemon at %s\n", entry.BaseURL())
 		if !sc.NoOpen && !daemon.DaemonHasBrowser(entry) {
-			go browser.OpenBrowser(entry.BaseURL())
+			go browser.OpenBrowserWithCommand(entry.BaseURL(), sc.OpenCmd)
 		}
 	} else {
 		if len(sc.Files) == 0 && sc.Focus == nil && sc.PlanDir == "" && PreflightCheckFn != nil {

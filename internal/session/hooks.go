@@ -8,6 +8,7 @@ type CLIReviewConfig struct {
 	Focus              *Focus
 	PlanDir            string
 	NoOpen             bool
+	OpenCmd            string
 	NoIntegrationCheck bool
 	VCSOverride        string
 	BaseBranch         string

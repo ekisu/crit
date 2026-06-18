@@ -178,6 +178,15 @@ func TestMergeConfigsHostGlobalOnly(t *testing.T) {
 	}
 }
 
+func TestMergeConfigsOpenCmdGlobalOnly(t *testing.T) {
+	global := Config{OpenCmd: "/usr/local/bin/crit-open"}
+	project := Config{OpenCmd: "/tmp/untrusted-open"}
+	merged := mergeConfigs(global, project, ConfigPresence{})
+	if merged.OpenCmd != "/usr/local/bin/crit-open" {
+		t.Errorf("open_cmd = %q, want global value", merged.OpenCmd)
+	}
+}
+
 func TestBaseBranchConfig(t *testing.T) {
 	t.Run("loadConfigFile parses base_branch", func(t *testing.T) {
 		dir := t.TempDir()
@@ -287,11 +296,11 @@ func TestLoadConfig(t *testing.T) {
 	homeDir := t.TempDir()
 	testutil.SetHome(t, homeDir)
 	globalPath := filepath.Join(homeDir, ".crit.config.json")
-	os.WriteFile(globalPath, []byte(`{"port": 3000, "share_url": "https://global.example.com", "ignore_patterns": ["*.lock"]}`), 0644)
+	os.WriteFile(globalPath, []byte(`{"port": 3000, "share_url": "https://global.example.com", "open_cmd": "/usr/local/bin/crit-open", "ignore_patterns": ["*.lock"]}`), 0644)
 
 	// Set up project dir with config
 	projectDir := t.TempDir()
-	os.WriteFile(filepath.Join(projectDir, ".crit.config.json"), []byte(`{"port": 8080, "ignore_patterns": ["*.pb.go"]}`), 0644)
+	os.WriteFile(filepath.Join(projectDir, ".crit.config.json"), []byte(`{"port": 8080, "open_cmd": "/tmp/untrusted-open", "ignore_patterns": ["*.pb.go"]}`), 0644)
 
 	cfg := LoadConfig(projectDir)
 
@@ -300,6 +309,9 @@ func TestLoadConfig(t *testing.T) {
 	}
 	if cfg.ShareURL != "https://global.example.com" {
 		t.Errorf("share_url = %q, want global value", cfg.ShareURL)
+	}
+	if cfg.OpenCmd != "/usr/local/bin/crit-open" {
+		t.Errorf("open_cmd = %q, want global value", cfg.OpenCmd)
 	}
 	if len(cfg.IgnorePatterns) != 2 {
 		t.Errorf("ignore_patterns = %v, want 2 entries", cfg.IgnorePatterns)

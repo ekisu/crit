@@ -177,10 +177,11 @@ Available keys:
   no_update_check        bool      Disable update check on startup (default: false)
   cleanup_on_approve     bool      Auto-delete review file when approved (default: true)
   disable_stats          bool      Disable session stats recording (default: false)
+  open_cmd               string    Custom browser/open command
   agent_cmd              string    Shell command to send comments to an AI agent (e.g. "claude -p")
   auth_token             string    Authentication token for crit-web share service
 
-Note: agent_cmd, auth_token, host, and share_url are global-only (~/.crit.config.json).
+Note: agent_cmd, auth_token, host, open_cmd, and share_url are global-only (~/.crit.config.json).
 Project-level .crit.config.json cannot override them for security reasons.
 
 Ignore pattern syntax:

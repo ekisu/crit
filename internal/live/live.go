@@ -134,7 +134,7 @@ func LooksLikeLiveArgs(args []string) bool {
 	return u.Scheme == "http" || u.Scheme == "https"
 }
 
-func connectToLiveDaemon(key string) bool {
+func connectToLiveDaemon(key, openCmd string) bool {
 	entry, alive := daemon.FindAliveSession(key)
 	if !alive {
 		return false
@@ -143,7 +143,7 @@ func connectToLiveDaemon(key string) bool {
 		entry.BaseURL(), entry.Port+1)
 	fmt.Fprintf(os.Stderr, "[crit] open %s/live\n", entry.BaseURL())
 	if !daemon.DaemonHasBrowser(entry) {
-		go browser.OpenBrowser(entry.BaseURL() + "/live")
+		go browser.OpenBrowserWithCommand(entry.BaseURL()+"/live", openCmd)
 	}
 	daemon.RunReviewClient(entry, key)
 	return true
@@ -237,7 +237,7 @@ func RunLive(args []string) {
 	checkLiveSmoke(f.origin, liveCookies)
 
 	key := daemon.LiveSessionKey(cwd, f.origin)
-	if connectToLiveDaemon(key) {
+	if connectToLiveDaemon(key, cfg.OpenCmd) {
 		return
 	}
 
@@ -255,7 +255,7 @@ func RunLive(args []string) {
 	installDaemonSignalHandler(entry.PID)
 
 	if !noOpenResolved {
-		go browser.OpenBrowser(entry.BaseURL() + "/live")
+		go browser.OpenBrowserWithCommand(entry.BaseURL()+"/live", cfg.OpenCmd)
 	}
 
 	daemon.RunReviewClient(entry, key)

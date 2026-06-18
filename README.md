@@ -308,11 +308,12 @@ All keys are optional — omit any you don't need.
 
 ### Global-only config keys
 
-These keys can only be set in `~/.crit.config.json` (global). Project-level `.crit.config.json` cannot override them — this prevents a malicious repository from hijacking the agent command or redirecting share requests.
+These keys can only be set in `~/.crit.config.json` (global). Project-level `.crit.config.json` cannot override them — this prevents a malicious repository from hijacking local commands or redirecting share requests.
 
 | Key                    | Type     | Default                    | Description                                                                                                                                                                             |
 | ---------------------- | -------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `agent_cmd`            | string   | `""`                       | Shell command for "Send to agent" (e.g. `"claude -p"`). See [Send to agent](#send-to-agent-experimental). |
+| `open_cmd`             | string   | `""`                       | Custom browser/open command for review URLs. The command receives the URL as its only argument. When unset, crit uses the usual platform default opener. |
 | `auth_token`           | string   | `""`                       | Authentication token for crit.md. Set automatically by `crit auth login`. |
 | `share_url`            | string   | `"https://crit.md"`        | Base URL of the share service. Set to `""` to disable sharing entirely. Self-host with [`crit-web`](https://github.com/tomasz-tomczyk/crit-web). |
 | `share_consented`      | bool     | `false`                    | Written automatically to `true` after you confirm the first-time share prompt. Reset to `false` to see the prompt again. Not used when `share_url` is a custom (self-hosted) URL. |
