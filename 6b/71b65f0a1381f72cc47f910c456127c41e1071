@@ -1,0 +1,59 @@
+internal/browser/browser_test.go
+  s_3a8316f2d71f55::t_f306d42e7f697b 41,62,73,80,86-100,103,105-119
+  s_3a8316f2d71f55::t_0ed1da54426bba 101-102,104
+internal/config/config.go
+  s_3a8316f2d71f55::t_52b1da778fc229 26,91,118,246,248-249
+internal/server/daemon_cli.go
+  s_3a8316f2d71f55::t_52b1da778fc229 27,217
+internal/session/daemon_cli.go
+  s_3a8316f2d71f55::t_52b1da778fc229 23,28
+internal/preview/preview.go
+  s_3a8316f2d71f55::t_52b1da778fc229 42,50,102,126
+internal/session/review_cli.go
+  s_3a8316f2d71f55::t_52b1da778fc229 44
+internal/config/config_test.go
+  s_3a8316f2d71f55::t_39626e67e87ed4 181-189,299,303,313-314
+internal/session/plan_cli.go
+  s_3a8316f2d71f55::t_52b1da778fc229 126,130,135,235,246,265
+internal/auth/auth.go
+  s_3a8316f2d71f55::t_52b1da778fc229 85
+internal/preview/preview_run_test.go
+  s_3a8316f2d71f55::t_f63618ac9d10b6 11
+README.md
+  s_3a8316f2d71f55::t_39626e67e87ed4 311
+  s_3a8316f2d71f55::t_0ed1da54426bba 316
+internal/live/live.go
+  s_3a8316f2d71f55::t_52b1da778fc229 137,146,240,258
+cmd/crit/cli_serve.go
+  s_3a8316f2d71f55::t_09b93f11b02383 208
+cmd/crit/cli_dispatch.go
+  s_3a8316f2d71f55::t_39626e67e87ed4 184
+  s_3a8316f2d71f55::t_0ed1da54426bba 180
+cmd/crit/wire.go
+  s_3a8316f2d71f55::t_09b93f11b02383 50
+  s_3a8316f2d71f55::t_52b1da778fc229 94
+internal/session/hooks.go
+  s_3a8316f2d71f55::t_52b1da778fc229 11
+internal/browser/browser.go
+  s_3a8316f2d71f55::t_0ed1da54426bba 16
+  s_3a8316f2d71f55::t_78010f376dcb1c 40,44,49,51,80-83,85-86,89
+  s_3a8316f2d71f55::t_52b1da778fc229 12-14
+  s_3a8316f2d71f55::t_1312bafd7cd3f6 50
+  s_3a8316f2d71f55::t_40171411358984 41,84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "6b71b65f0a1381f72cc47f910c456127c41e1071",
+  "prompts": {},
+  "sessions": {
+    "s_3a8316f2d71f55": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_124d46916ffeRQgeFyrIxs0Z1K",
+        "model": "gpt-5.5"
+      },
+      "human_author": "Ramon Dantas <ramon.dantas@facio.com>"
+    }
+  }
+}
