@@ -36,7 +36,7 @@ var integrationHashes = map[string]string{
 	"integrations/grok/skills/crit/SKILL.md":                        "343e2920e5de9be0a96067e8c29f9b16c24ee2e108da2bb805018a4649ebf728",
 	"integrations/hermes/skills/crit-cli/SKILL.md":                  "bb78303077d690e73f57d17cffa895f80aa1632413bd7f749659c5f2f95d288c",
 	"integrations/hermes/skills/crit/SKILL.md":                      "a22cade9cda7a573b910cec4a245435fff524e1197ffe084f4b17558ee3f5c37",
-	"integrations/opencode/crit.md":                                 "c4726311422505b55ea2e19f5b76dfdf0e86c7536c985315f3d67377808c175e",
+	"integrations/opencode/crit.md":                                 "066cdd4d8a3761bdbf5fbef4e2a23a4b0b400ec0521893463865787ab94f15c1",
 	"integrations/opencode/plugin/crit.ts":                          "bbb6b53ead31f811b46c51055e4c225536f91f52a4eca1667b7e14d600e30958",
 	"integrations/opencode/plugin/lib/crit-wait-notify.js":          "95f4b82ebfc9ee60b2595bda3a260069aa6f34edea6c5b9eb9b503b7c6a58edb",
 	"integrations/opencode/plugin/lib/crit-wait-notify.test.js":     "9ac621e93e99e1a68c536f9e05535914b691107fb0e4d7d95a93b635d3855991",

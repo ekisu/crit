@@ -16,24 +16,59 @@ Pick whichever applies — don't ask for confirmation:
 3. **Branch review** — otherwise → bare `crit`. Auto-detects uncommitted changes or branch-vs-default-branch diff. Works on clean branches.
 4. **PR / commit range** — user asked to review a specific GitHub PR or a commit range → `crit --pr <num|url>` or `crit --range <baseSHA>..<headSHA>` (boots crit in *range mode*, scoping the review to a fixed range of commits rather than the working tree).
 
-## Step 2: Launch crit and block until review completes
+## Step 2: Launch crit and wait for review completion
 
 **CRITICAL — you MUST run this step. Do NOT skip it. Do NOT proceed without it.**
 
-Run `crit` in the foreground and block until it exits:
+Inspect the available Bash/shell tool schema. Use the same strategy for the initial review and every subsequent round.
 
-```bash
-crit <plan-file>   # specific file
-crit               # git mode
+### Background-capable shell
+
+If the Bash/shell tool exposes a `background` boolean, launch `crit` with `background: true` and no `timeout` argument. Background commands default to no timeout. Do not append `&`, use `nohup`, or wrap the command in another backgrounding mechanism.
+
+```text
+Shell tool call:
+- command: crit <plan-file>   # specific file
+- background: true
+
+Shell tool call:
+- command: crit               # git mode
+- background: true
 ```
 
-If a crit server is already running from earlier in this conversation, `crit` automatically connects to it. Starting from scratch, it spawns the daemon, opens the browser, and blocks until the user clicks "Finish Review".
+The tool returns immediately and notifies you automatically when `crit` finishes. Do not poll, sleep, read the review file early, or launch a duplicate command while it is running.
 
-`crit` prints the review URL on startup (e.g. `Started crit daemon at http://localhost:<port>`). Relay it verbatim:
+Tell the user:
+
+> **"Crit is running in the background and will open in your browser. Leave inline comments, then click Finish Review."**
+
+End the current response after launching it. When the completion notification arrives, continue at Step 3.
+
+### Foreground-only shell
+
+If the Bash/shell tool does not expose `background`, run `crit` in the foreground with an explicit 24-hour timeout. The timeout is a tool argument in milliseconds, not part of the shell command:
+
+```text
+Bash tool call:
+- command: crit <plan-file>   # specific file
+- timeout: 86400000
+
+Bash tool call:
+- command: crit               # git mode
+- timeout: 86400000
+```
+
+Always pass `timeout: 86400000` to every blocking `crit` invocation. Do not rely on the shell tool's default timeout. Wait for the command to exit before continuing.
+
+If a crit server is already running from earlier in this conversation, `crit` automatically connects to it. Starting from scratch, it spawns the daemon, opens the browser, and waits until the user clicks "Finish Review".
+
+In foreground mode, `crit` prints the review URL on startup (e.g. `Started crit daemon at http://localhost:<port>`). Relay it verbatim:
 
 > **"Crit is open at http://localhost:<port>. Leave inline comments, then click Finish Review."**
 
-**Do NOT proceed until `crit` completes.** Do NOT ask the user to type anything. Do NOT read the review file early. Wait for the foreground command to finish — that is how you know the human is done reviewing.
+In background mode, intermediate output may not be available before completion; rely on Crit opening the browser automatically rather than polling for the URL.
+
+**Do NOT proceed until `crit` completes.** Do NOT ask the user to type anything. Command completion is how you know the human is done reviewing.
 
 ## Step 3: Read the review output
 
@@ -91,6 +126,13 @@ crit comment --json --file /tmp/replies.json --author 'OpenCode'
 The finish prompt on stdout includes the command to run again — use it to start a new round.
 
 On subsequent calls, `crit` automatically signals round-complete first, then blocks until the next "Finish Review" click.
+
+Use the same shell strategy selected in Step 2:
+
+- Background-capable shell: invoke the next `crit` round with `background: true` and no `timeout`, then end the response and wait for the automatic completion notification.
+- Foreground-only shell: invoke the next `crit` round with `timeout: 86400000` and block until it completes.
+
+Never run more than one `crit` invocation for the same review round.
 
 Tell the user: **"Changes applied. Review the diff in your browser and click Finish Review when ready."**
 
