@@ -117,6 +117,12 @@ type Server struct {
 	codeFontFamiliesLoaded bool
 	codeFontFamilies       []string
 	codeFontDiscovery      func() ([]string, error)
+
+	liveAgentMu       sync.RWMutex
+	liveAgentSend     func(context.Context, json.RawMessage) error
+	liveAgentReload   func(context.Context) error
+	liveAgentSequence uint64
+	liveAgentMessages []liveAgentMessage
 }
 
 // NewServer creates a Server with the given session and configuration.
@@ -164,6 +170,9 @@ func NewServer(session *Session, frontendFS embed.FS, shareURL string, proxyAuth
 	mux.HandleFunc("/api/config", s.withReady(s.handleConfig))
 	mux.HandleFunc("/api/code-fonts", s.withReady(s.handleCodeFonts))
 	mux.HandleFunc("/api/session", s.withReady(s.handleSession))
+	mux.HandleFunc("/api/live/agent", s.withReady(s.handleLiveAgent))
+	mux.HandleFunc("/api/live/messages", s.withReady(s.handleLiveAgentMessages))
+	mux.HandleFunc("/api/live/reload", s.withReady(s.handleLiveReload))
 	mux.HandleFunc("/api/share", s.withReady(s.handleShare))
 	mux.HandleFunc("/api/share-consent", s.withReady(s.handleShareConsent))
 	mux.HandleFunc("/api/project-prompts/trust", s.withReady(s.handleProjectPromptTrust))
@@ -664,17 +673,114 @@ func (s *Server) handleSession(w http.ResponseWriter, r *http.Request) {
 	}
 	type liveSessionResponse struct {
 		SessionInfo
-		ReviewType string `json:"review_type,omitempty"`
-		Origin     string `json:"origin,omitempty"`
-		ProxyPort  int    `json:"proxy_port,omitempty"`
+		ReviewType    string `json:"review_type,omitempty"`
+		Origin        string `json:"origin,omitempty"`
+		ProxyPort     int    `json:"proxy_port,omitempty"`
+		LiveTransport string `json:"live_transport,omitempty"`
 	}
 	resp := liveSessionResponse{SessionInfo: info}
 	if session != nil {
 		resp.ReviewType = session.ReviewType
 		resp.Origin = session.Origin
 		resp.ProxyPort = session.ProxyPort
+		resp.LiveTransport = session.LiveTransport
 	}
 	writeJSON(w, resp)
+}
+
+// SetLiveAgentTransport installs the command and reload operations for a
+// detached live target, such as an Electron renderer attached over CDP.
+func (s *Server) SetLiveAgentTransport(send func(context.Context, json.RawMessage) error, reload func(context.Context) error) {
+	s.liveAgentMu.Lock()
+	s.liveAgentSend = send
+	s.liveAgentReload = reload
+	s.liveAgentMu.Unlock()
+}
+
+type liveAgentMessage struct {
+	Sequence uint64          `json:"sequence"`
+	Message  json.RawMessage `json:"message"`
+}
+
+// PublishLiveAgentMessage stores and broadcasts a message from a detached
+// target. The bounded replay buffer closes EventSource reconnect gaps without
+// allowing an unattended review to grow memory indefinitely.
+func (s *Server) PublishLiveAgentMessage(message json.RawMessage) {
+	s.liveAgentMu.Lock()
+	s.liveAgentSequence++
+	entry := liveAgentMessage{Sequence: s.liveAgentSequence, Message: append(json.RawMessage(nil), message...)}
+	s.liveAgentMessages = append(s.liveAgentMessages, entry)
+	if len(s.liveAgentMessages) > 512 {
+		s.liveAgentMessages = append([]liveAgentMessage(nil), s.liveAgentMessages[len(s.liveAgentMessages)-512:]...)
+	}
+	s.liveAgentMu.Unlock()
+	if sess := s.session.Load(); sess != nil {
+		sess.Notify(SSEEvent{Type: "live-agent-message", Content: string(message), Sequence: entry.Sequence})
+	}
+}
+
+func (s *Server) handleLiveAgentMessages(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	after, err := strconv.ParseUint(r.URL.Query().Get("after"), 10, 64)
+	if err != nil && r.URL.Query().Get("after") != "" {
+		http.Error(w, "Invalid sequence", http.StatusBadRequest)
+		return
+	}
+	s.liveAgentMu.RLock()
+	messages := make([]liveAgentMessage, 0, len(s.liveAgentMessages))
+	for _, message := range s.liveAgentMessages {
+		if message.Sequence > after {
+			messages = append(messages, message)
+		}
+	}
+	s.liveAgentMu.RUnlock()
+	writeJSON(w, map[string]any{"messages": messages})
+}
+
+func (s *Server) handleLiveAgent(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	s.liveAgentMu.RLock()
+	send := s.liveAgentSend
+	s.liveAgentMu.RUnlock()
+	if send == nil {
+		http.Error(w, "Detached live transport unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 1<<20))
+	if err != nil || !json.Valid(body) {
+		http.Error(w, "Invalid agent command", http.StatusBadRequest)
+		return
+	}
+	if err := send(r.Context(), json.RawMessage(body)); err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleLiveReload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	s.liveAgentMu.RLock()
+	reload := s.liveAgentReload
+	s.liveAgentMu.RUnlock()
+	if reload == nil {
+		http.Error(w, "Detached live transport unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if err := reload(r.Context()); err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // serveIndexHTML returns a handler that serves the embedded index.html shell.

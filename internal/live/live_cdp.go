@@ -3,6 +3,7 @@ package live
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -133,9 +134,67 @@ func defaultFetchCDPCookies(ctx context.Context, cdpBaseURL, originURL string) (
 }
 
 type cdpTarget struct {
+	ID                   string `json:"id"`
+	Title                string `json:"title"`
 	Type                 string `json:"type"`
 	URL                  string `json:"url"`
 	WebSocketDebuggerURL string `json:"webSocketDebuggerUrl"`
+}
+
+// CDPPageTarget identifies an inspectable page in a Chromium-compatible
+// remote debugging endpoint.
+type CDPPageTarget struct {
+	ID                   string
+	Title                string
+	URL                  string
+	WebSocketDebuggerURL string
+}
+
+// SelectCDPPageTarget selects one inspectable page. A non-empty match is
+// compared case-insensitively against target title, URL, and ID.
+func SelectCDPPageTarget(ctx context.Context, cdpBaseURL, match string) (CDPPageTarget, error) {
+	baseURL := normalizeCDPBaseURL(cdpBaseURL)
+	if baseURL == "" {
+		return CDPPageTarget{}, errors.New("Chrome DevTools URL is empty")
+	}
+	targets, err := cdpListTargets(ctx, baseURL)
+	if err != nil {
+		return CDPPageTarget{}, err
+	}
+	needle := strings.ToLower(strings.TrimSpace(match))
+	var pages []cdpTarget
+	for _, target := range targets {
+		if target.Type != "page" || target.WebSocketDebuggerURL == "" {
+			continue
+		}
+		if needle != "" {
+			haystack := strings.ToLower(target.Title + "\n" + target.URL + "\n" + target.ID)
+			if !strings.Contains(haystack, needle) {
+				continue
+			}
+		}
+		pages = append(pages, target)
+	}
+	if len(pages) == 0 {
+		if needle == "" {
+			return CDPPageTarget{}, errors.New("no inspectable page targets found")
+		}
+		return CDPPageTarget{}, fmt.Errorf("no inspectable page target matches %q", match)
+	}
+	if len(pages) > 1 {
+		var choices []string
+		for _, target := range pages {
+			choices = append(choices, fmt.Sprintf("%q (%s)", target.Title, target.URL))
+		}
+		return CDPPageTarget{}, fmt.Errorf("multiple page targets match; use --target to choose one: %s", strings.Join(choices, ", "))
+	}
+	target := pages[0]
+	return CDPPageTarget{
+		ID:                   target.ID,
+		Title:                target.Title,
+		URL:                  target.URL,
+		WebSocketDebuggerURL: target.WebSocketDebuggerURL,
+	}, nil
 }
 
 func cdpPageWebSocketURL(ctx context.Context, cdpBaseURL, originURL string) (string, error) {

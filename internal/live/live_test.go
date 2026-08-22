@@ -532,6 +532,25 @@ func TestBuildLiveDaemonArgs(t *testing.T) {
 	if !containsArgPair(fromCfg, "--public-url", "https://cfg.ts.net") {
 		t.Fatalf("missing config public-url: %v", fromCfg)
 	}
+
+	cdp := buildLiveDaemonArgs("file:///app/index.html", "", liveCLIFlags{
+		attachCDP:           "127.0.0.1:9315",
+		selectedTargetTitle: "Mapping Tools",
+		selectedTargetID:    "target-one",
+		cdpWebSocket:        "ws://127.0.0.1:9315/devtools/page/one",
+		sessionKey:          "session-key",
+	}, Config{}, false)
+	for flag, want := range map[string]string{
+		"--live-cdp-websocket":       "ws://127.0.0.1:9315/devtools/page/one",
+		"--live-cdp-endpoint":        "http://127.0.0.1:9315",
+		"--live-cdp-target":          "target-one",
+		"--live-cdp-target-fallback": "Mapping Tools",
+		"--session-key":              "session-key",
+	} {
+		if !containsArgPair(cdp, flag, want) {
+			t.Fatalf("missing %s=%s in %v", flag, want, cdp)
+		}
+	}
 }
 
 func TestRunLive_ColdStartBrowserOwnership(t *testing.T) {

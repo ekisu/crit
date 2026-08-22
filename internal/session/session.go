@@ -201,6 +201,7 @@ type SSEEvent struct {
 	Type     string `json:"type"`
 	Filename string `json:"filename"`
 	Content  string `json:"content"`
+	Sequence uint64 `json:"sequence,omitempty"`
 	// Round is non-zero for live-mode round-start events; carries the
 	// round number that just started.
 	Round int `json:"round,omitempty"`
@@ -394,9 +395,10 @@ type Session struct {
 	generatedRules []vcs.GeneratedRule
 
 	// Live-mode runtime fields. Zero values are safe for code reviews.
-	ReviewType string // "", "live", or "preview"
-	Origin     string // upstream URL, e.g. "http://localhost:3000"
-	ProxyPort  int    // proxy server port; 0 for code reviews
+	ReviewType    string // "", "live", or "preview"
+	Origin        string // upstream URL, e.g. "http://localhost:3000"
+	ProxyPort     int    // proxy server port; 0 for code reviews
+	LiveTransport string // "proxy" or "cdp" for live reviews
 
 	// liveRoundStart, when non-nil and ReviewType is "live" or
 	// "preview", is invoked after ReviewRound is bumped. Production wiring
@@ -2667,7 +2669,10 @@ func (s *Session) appendOrphanedFiles(critFiles map[string]CritJSONFile) {
 
 // Subscribe registers a new SSE subscriber.
 func (s *Session) Subscribe() chan SSEEvent {
-	ch := make(chan SSEEvent, 4)
+	// Live CDP targets can emit one resolution event per pin in a burst.
+	// Sessions are local and typically have fewer than 50 comments, so this
+	// bounded buffer avoids dropping protocol events without meaningful cost.
+	ch := make(chan SSEEvent, 256)
 	s.subMu.Lock()
 	s.subscribers[ch] = struct{}{}
 	s.subMu.Unlock()

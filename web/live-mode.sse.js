@@ -41,6 +41,8 @@
     var setUIState = deps.setUIState || function () {};
     var reloadComments = deps.reloadComments || function () { return Promise.resolve(); };
     var reloadIframe = deps.reloadIframe || function () {};
+	var onAgentMessage = deps.onAgentMessage || function () {};
+	var onOpen = deps.onOpen || function () {};
 
     // Dedup guard — if a burst of comments-changed events arrives while a
     // reload is in flight, coalesce them into a single trailing reload.
@@ -116,7 +118,7 @@
     function install() {
       if (typeof window === 'undefined') return;
       if (!window.crit || !window.crit.sse) return;
-      var conn = window.crit.sse.createSSE('/api/events', {
+	  var conn = window.crit.sse.createSSE('/api/events', {
         'live-round-start': function (data) {
           if (!data || typeof data.round !== 'number') return;
           applyRoundStart(data.round);
@@ -128,11 +130,30 @@
           // list so we don't have to mirror reconciliation rules client-side.
           applyCommentsChanged();
         },
+		'live-agent-message': function (data) {
+		  if (!data || typeof data.content !== 'string') return;
+		  if (state.cdpReplayInFlight) {
+			(state.cdpPendingEvents = state.cdpPendingEvents || []).push(data);
+			return;
+		  }
+		  if (data.sequence && data.sequence <= (state.cdpMessageSequence || 0)) return;
+		  if (data.sequence && data.sequence > (state.cdpMessageSequence || 0) + 1) {
+			state.cdpReplayInFlight = true;
+			(state.cdpPendingEvents = state.cdpPendingEvents || []).push(data);
+			onOpen();
+			return;
+		  }
+		  if (data.sequence) state.cdpMessageSequence = data.sequence;
+		  try { onAgentMessage(JSON.parse(data.content)); } catch (_) { /* malformed bridge event */ }
+		},
         'server-shutdown': function () {
           conn.close();
           showLiveDisconnected();
-        },
-      });
+		},
+	  }, { onOpen: function () {
+		state.cdpReplayInFlight = true;
+		onOpen();
+	  } });
       state.liveSSE = conn;
       return conn;
     }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -14,13 +15,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tomasz-tomczyk/crit/internal/live"
 	"github.com/tomasz-tomczyk/crit/internal/reviewpath"
 	"github.com/tomasz-tomczyk/crit/internal/server"
 )
 
-// liveSessionArgsTag is the leading element of sessionEntry.Args for a
-// live daemon: ["live", "<origin>"].
-const liveSessionArgsTag = "live"
+func liveCLIArgs(sc *server.DaemonCLIConfig) []string {
+	if sc.LiveCDPEndpoint != "" {
+		return []string{"live-cdp", sc.LiveOrigin, sc.LiveCDPEndpoint, sc.LiveCDPTarget, sc.LiveCDPTargetFallback}
+	}
+	return []string{"live", sc.LiveOrigin}
+}
 
 func serveSessionKey(sc *server.DaemonCLIConfig) string {
 	if sc.SessionKeyOverride != "" {
@@ -113,6 +118,19 @@ func runServe(args []string) {
 		return
 	}
 	sc.Quiet = true
+	if sc.LiveCDPEndpoint != "" && sc.LiveCDPWebSocket == "" {
+		target, targetErr := live.SelectCDPPageTarget(context.Background(), sc.LiveCDPEndpoint, sc.LiveCDPTarget)
+		if targetErr != nil && sc.LiveCDPTargetFallback != "" {
+			target, targetErr = live.SelectCDPPageTarget(context.Background(), sc.LiveCDPEndpoint, sc.LiveCDPTargetFallback)
+		}
+		if targetErr != nil {
+			daemonFatal(pipe, "Error rediscovering CDP target: %v", targetErr)
+		}
+		sc.LiveOrigin = target.URL
+		sc.LiveCDPWebSocket = target.WebSocketDebuggerURL
+		sc.LiveCDPTarget = target.ID
+		sc.LiveCDPTargetFallback = target.Title
+	}
 
 	listener, err := bindListener(sc.Host, sc.Port)
 	if err != nil {
@@ -147,7 +165,7 @@ func runServe(args []string) {
 	var cliArgs []string
 	switch {
 	case sc.LiveOrigin != "":
-		cliArgs = []string{"live", sc.LiveOrigin}
+		cliArgs = liveCLIArgs(sc)
 	case sc.PreviewFile != "":
 		cliArgs = []string{"preview", sc.PreviewFile}
 	default:
@@ -155,7 +173,7 @@ func runServe(args []string) {
 	}
 	sessionArgs := sc.Files
 	if sc.LiveOrigin != "" {
-		sessionArgs = []string{liveSessionArgsTag, sc.LiveOrigin}
+		sessionArgs = liveCLIArgs(sc)
 	}
 	if sc.PreviewFile != "" {
 		sessionArgs = []string{"preview", sc.PreviewFile}
@@ -179,7 +197,7 @@ func runServe(args []string) {
 
 	var proxyLn net.Listener
 	var proxySrv *http.Server
-	if sc.LiveOrigin != "" {
+	if sc.LiveOrigin != "" && sc.LiveCDPWebSocket == "" {
 		pl, ps, err := bindProxyServer(sc.LiveOrigin, addr.Port, sc.LiveCookie)
 		if err != nil {
 			daemonFatal(pipe, "Error starting proxy server: %v", err)
@@ -264,7 +282,7 @@ func runServe(args []string) {
 	server.ApplySessionOverrides(sess, sc)
 	switch {
 	case sc.LiveOrigin != "":
-		sess.CLIArgs = []string{"live", sc.LiveOrigin}
+		sess.CLIArgs = liveCLIArgs(sc)
 	case sc.PreviewFile != "":
 		sess.CLIArgs = []string{"preview", sc.PreviewFile}
 	default:
@@ -281,6 +299,28 @@ func runServe(args []string) {
 		sess.ProxyPort = proxyLn.Addr().(*net.TCPAddr).Port
 		sess.ReviewType = "live"
 		sess.Origin = sc.LiveOrigin
+		sess.LiveTransport = "proxy"
+	}
+	var cdpController *live.CDPPageController
+	if sc.LiveCDPWebSocket != "" {
+		cdpController, err = live.NewCDPPageController(sc.LiveCDPWebSocket)
+		if err != nil {
+			daemonFatal(pipe, "Error preparing CDP target: %v", err)
+		}
+		cdpController.SetMessageCallback(func(message json.RawMessage) {
+			srv.PublishLiveAgentMessage(message)
+		})
+		cdpController.SetDisconnectCallback(stop)
+		startCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		if err := cdpController.Start(startCtx); err != nil {
+			cancel()
+			daemonFatal(pipe, "Error attaching to CDP target: %v", err)
+		}
+		cancel()
+		srv.SetLiveAgentTransport(cdpController.Send, cdpController.Reload)
+		sess.ReviewType = "live"
+		sess.Origin = sc.LiveOrigin
+		sess.LiveTransport = "cdp"
 	}
 	if sess.ReviewType == "live" || sess.ReviewType == "preview" {
 		sess.SetLiveRoundStart(func(_, next int) {
@@ -331,6 +371,9 @@ func runServe(args []string) {
 			defer proxyCancel()
 			_ = proxySrv.Shutdown(proxyCtx)
 		}()
+	}
+	if cdpController != nil {
+		_ = cdpController.Close()
 	}
 	shutWG.Wait()
 	_ = proxyLn

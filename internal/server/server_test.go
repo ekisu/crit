@@ -64,6 +64,57 @@ func newTestServer(t *testing.T) (*Server, *Session) {
 	return s, session
 }
 
+func TestLiveAgentTransportEndpoints(t *testing.T) {
+	srv, _ := newTestServer(t)
+	var command json.RawMessage
+	var reloaded bool
+	srv.SetLiveAgentTransport(func(_ context.Context, raw json.RawMessage) error {
+		command = append(command[:0], raw...)
+		return nil
+	}, func(context.Context) error {
+		reloaded = true
+		return nil
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/live/agent", strings.NewReader(`{"type":"set-mode","value":"pin"}`))
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("agent status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if string(command) != `{"type":"set-mode","value":"pin"}` {
+		t.Fatalf("command = %s", command)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/live/reload", nil)
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent || !reloaded {
+		t.Fatalf("reload status = %d, reloaded = %v", rec.Code, reloaded)
+	}
+
+	srv.PublishLiveAgentMessage(json.RawMessage(`{"type":"agent-ready"}`))
+	srv.PublishLiveAgentMessage(json.RawMessage(`{"type":"focus-state","in_input":false}`))
+	req = httptest.NewRequest(http.MethodGet, "/api/live/messages?after=1", nil)
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("messages status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var replay struct {
+		Messages []struct {
+			Sequence uint64          `json:"sequence"`
+			Message  json.RawMessage `json:"message"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &replay); err != nil {
+		t.Fatal(err)
+	}
+	if len(replay.Messages) != 1 || replay.Messages[0].Sequence != 2 || !strings.Contains(string(replay.Messages[0].Message), "focus-state") {
+		t.Fatalf("unexpected replay: %+v", replay.Messages)
+	}
+}
+
 func TestGetSession(t *testing.T) {
 	s, _ := newTestServer(t)
 	req := httptest.NewRequest("GET", "/api/session", nil)

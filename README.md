@@ -106,6 +106,23 @@ crit live http://localhost:4000/dashboard --cdp-url http://127.0.0.1:9222
 
 **Getting cookies:** log in to the app in your browser, then copy the session cookie from DevTools (Application → Cookies), export a cookie jar, or start Chrome with `--remote-debugging-port=9222` and pass `--cdp-url` so Crit reads cookies for the target origin automatically.
 
+#### Electron and existing Chromium targets
+
+Crit can attach its live-review agent directly to a running Electron or Chromium page through the Chrome DevTools Protocol. The application stays in its real window, so Electron preload APIs and IPC continue to work. Use Pin mode in Crit, then click the element in the application window.
+
+```bash
+# Start Electron with a loopback remote-debugging endpoint.
+electron . --remote-debugging-port=9315
+
+# Attach when the endpoint exposes one page target.
+crit live --attach-cdp http://127.0.0.1:9315
+
+# Select among multiple BrowserWindows or tabs by title, URL, or target ID.
+crit live --attach-cdp http://127.0.0.1:9315 --target "Mapping Tools"
+```
+
+The debugging endpoint allows arbitrary renderer control. Enable it only for local development, bind it to loopback, and never ship it enabled in a packaged application. DOM pins work in the attached page's top-level document. Native menus, dialogs, operating-system chrome, and content inside child frames cannot be pinned.
+
 **Config** (global or project `.crit.config.json`; project overrides global):
 
 ```json

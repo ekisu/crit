@@ -3,6 +3,7 @@ package live
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -26,6 +27,29 @@ func TestNormalizeCDPBaseURL(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("normalizeCDPBaseURL(%q) = %q, want %q", tc.in, got, tc.want)
 		}
+	}
+}
+
+func TestSelectCDPPageTarget(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `[
+  {"id":"one","type":"page","title":"Mapping Tools","url":"file:///app/index.html","webSocketDebuggerUrl":"ws://target/one"},
+  {"id":"two","type":"page","title":"Settings","url":"file:///app/settings.html","webSocketDebuggerUrl":"ws://target/two"},
+  {"id":"worker","type":"service_worker","title":"Worker","url":"file:///worker.js","webSocketDebuggerUrl":"ws://target/worker"}
+]`)
+	}))
+	defer server.Close()
+
+	target, err := SelectCDPPageTarget(context.Background(), server.URL, "mapping")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target.ID != "one" || target.Title != "Mapping Tools" || target.WebSocketDebuggerURL != "ws://target/one" {
+		t.Fatalf("unexpected target: %+v", target)
+	}
+	if _, err := SelectCDPPageTarget(context.Background(), server.URL, ""); err == nil || !strings.Contains(err.Error(), "multiple page targets") {
+		t.Fatalf("ambiguous target error = %v", err)
 	}
 }
 

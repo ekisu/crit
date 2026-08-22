@@ -426,15 +426,29 @@
     // accepts only that source+origin pair.
     // Preview mode: same-origin (agent served from /preview-content/).
     var s = state.session || {};
+	state.isCDP = s.live_transport === 'cdp';
     var proxyHost = window.location.hostname || 'localhost';
     if (state.isPreview) {
       state.proxyOrigin = window.location.origin;
+	} else if (state.isCDP) {
+	  state.proxyOrigin = '';
     } else {
       state.proxyOrigin = 'http://' + proxyHost + ':' + (s.proxy_port || 0);
     }
     buildShell();
+	if (state.isCDP && els.frame) {
+	  if (els.iframe) els.iframe.hidden = true;
+	  els.frame.classList.add('crit-live-detached-frame');
+	  var notice = document.createElement('div');
+	  notice.className = 'crit-live-detached-notice';
+	  notice.innerHTML = '<strong>Attached to Electron</strong><span>Use Pin mode here, then click an element in the application window.</span><code></code>';
+	  var code = notice.querySelector('code');
+	  if (code) code.textContent = state.session.origin || '';
+	  els.frame.appendChild(notice);
+	  if (els.viewportToggle) els.viewportToggle.hidden = true;
+	}
     // Cache the iframeWindow once buildShell has inserted it.
-    state.iframeWindow = els.iframe ? els.iframe.contentWindow : null;
+	state.iframeWindow = !state.isCDP && els.iframe ? els.iframe.contentWindow : null;
 
     // Run installers in registration order.
     installers.forEach(function (fn) {
@@ -580,6 +594,7 @@
 
   registerInstaller(function installIframe() {
     state.currentRoute = utils.normaliseRoute(state.currentRoute);
+	if (state.isCDP) return;
     if (els.iframe) els.iframe.src = proxyURL(state.currentRoute);
   });
 
@@ -2162,7 +2177,7 @@
   });
 
   registerInstaller(function installAgentBridge() {
-    if (!state.iframeWindow || !state.proxyOrigin) return;
+	if (!state.isCDP && (!state.iframeWindow || !state.proxyOrigin)) return;
     var protocol = window.crit && window.crit.agentProtocol;
     if (!protocol) return;
     var dispatchMod = window.crit.live.dispatch;
@@ -2170,13 +2185,23 @@
     var originMod = window.crit.live.origin;
     if (!dispatchMod || !queueMod || !originMod) return;
 
-    _sender = queueMod.makeAgentSender({
-      post: function (m) {
-        var iw = state.iframeWindow;
-        if (!iw) { _sender.requeue(m); return; }
-        try { iw.postMessage(m, state.proxyOrigin); } catch (_) { /* noop */ }
-      },
-    });
+	_sender = queueMod.makeAgentSender({
+	  post: function (m) {
+		if (state.isCDP) {
+		  state.cdpSendChain = (state.cdpSendChain || Promise.resolve()).then(function () { return fetch('/api/live/agent', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(m),
+		  }); }).then(function (res) {
+			if (!res.ok) throw new Error('CDP agent command failed: ' + res.status);
+		  }).catch(function (err) { console.error('[live-mode] CDP command error:', err); });
+		  return;
+		}
+		var iw = state.iframeWindow;
+		if (!iw) { _sender.requeue(m); return; }
+		try { iw.postMessage(m, state.proxyOrigin); } catch (_) { /* noop */ }
+	  },
+	});
 
     var dispatch = dispatchMod.makeMessageDispatcher({
       onAgentReady: handleAgentReady,
@@ -2194,6 +2219,10 @@
         }
       },
     });
+	state.dispatchAgentMessage = dispatch;
+	if (state.isCDP) {
+	  return;
+	}
 
     var guard = originMod.makeOriginGuard({
       expectSource: state.iframeWindow,
@@ -2327,6 +2356,51 @@
         pushPinsToAgent();
       });
     },
+	onAgentMessage: function (message) {
+	  if (state.dispatchAgentMessage) state.dispatchAgentMessage(message);
+	},
+	onOpen: function replayCDPEvents() {
+	  if (!state.isCDP) return;
+	  state.cdpReplayInFlight = true;
+	  if (state.cdpReplayTimer) clearTimeout(state.cdpReplayTimer);
+	  fetch('/api/live/messages?after=' + (state.cdpMessageSequence || 0))
+		.then(function (res) { return res.ok ? res.json() : Promise.reject(new Error('CDP replay failed: ' + res.status)); })
+		.then(function (data) {
+		  var messages = data && Array.isArray(data.messages) ? data.messages : [];
+		  messages.forEach(function (entry) {
+			if (!entry || entry.sequence <= (state.cdpMessageSequence || 0)) return;
+			state.cdpMessageSequence = entry.sequence;
+			if (state.dispatchAgentMessage) state.dispatchAgentMessage(entry.message);
+		  });
+		  var pending = (state.cdpPendingEvents || []).splice(0);
+		  pending.sort(function (a, b) { return (a.sequence || 0) - (b.sequence || 0); });
+		  pending.forEach(function (entry) {
+			if (!entry || entry.sequence <= (state.cdpMessageSequence || 0)) return;
+			state.cdpMessageSequence = entry.sequence;
+			try {
+			  if (state.dispatchAgentMessage) state.dispatchAgentMessage(JSON.parse(entry.content));
+			} catch (_) { /* malformed bridge event */ }
+		  });
+		  state.cdpReplayInFlight = false;
+		  return true;
+		})
+		.catch(function (err) {
+		  console.error('[live-mode] CDP replay error:', err);
+		  return false;
+		})
+		.then(function (replayed) {
+		  if (!replayed) return;
+		  if (state.agentReady) return;
+		  state.cdpSendChain = (state.cdpSendChain || Promise.resolve()).then(function () { return fetch('/api/live/agent', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ type: 'crit-cdp-handshake' }),
+	  }); });
+		  return state.cdpSendChain;
+		})
+		.catch(function (err) { console.error('[live-mode] CDP handshake error:', err); })
+		.then(function () { state.cdpReplayTimer = setTimeout(replayCDPEvents, 1000); });
+	},
     // Reload the proxied target page on round transition so reviewers see
     // the agent's freshly-rendered UI. Same-origin between agent and
     // proxied page is guaranteed by proxy.go, so contentWindow.location
@@ -2334,6 +2408,14 @@
     // (with a cache-buster) if contentWindow access throws — defensive
     // against detached frames during teardown.
     reloadIframe: function () {
+	  if (state.isCDP) {
+		state.cdpSendChain = (state.cdpSendChain || Promise.resolve()).then(function () {
+		  return fetch('/api/live/reload', { method: 'POST' });
+		})
+		  .then(function (res) { if (!res.ok) throw new Error('CDP reload failed: ' + res.status); })
+		  .catch(function (err) { console.error('[live-mode] CDP reload error:', err); });
+		return;
+	  }
       if (!els || !els.iframe) return;
       try {
         var w = els.iframe.contentWindow;

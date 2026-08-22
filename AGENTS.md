@@ -66,6 +66,7 @@ crit                          # Review git changes (starts daemon, blocks for fe
 crit <file|dir> [...]         # Review specific files or directories (falls through to runReview)
 crit review [...]             # Explicit review invocation (same as default)
 crit live <url>               # Review a running web app in live mode (also: crit <url>)
+crit live --attach-cdp <url>  # Attach live mode to an Electron/Chromium page target
 crit preview <file.html>      # Review a local HTML file in preview mode (also: crit <file.html>)
 crit stop [--all]             # Stop daemon for current directory; --all stops every daemon
 crit status [--json]          # Show review file path, daemon status, comment stats

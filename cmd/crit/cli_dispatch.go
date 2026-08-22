@@ -101,6 +101,7 @@ Options:
       --no-open               Do not open a browser
   -o, --output <dir>          Crit data root for reviews`},
 	{name: "live", handler: runLive, help: `Usage: crit live [options] <url>
+	   crit live --attach-cdp <devtools-url> [--target <match>]
 
 Review a running web application in live mode.
 
@@ -113,6 +114,8 @@ Options:
       --cookie <value>     Forward a Cookie header
       --cookie-file <path> Read cookies from a file
       --cdp-url <url>      Reuse cookies from Chrome DevTools
+	  --attach-cdp <url>   Attach directly to a Chrome/Electron page target
+	  --target <match>     Select a CDP target by title, URL, or ID
       --share-url <url>    Share service URL
       --no-open            Do not open a browser
   -q, --quiet              On success, suppress connect/start status, tips, and session summary`},

@@ -59,7 +59,15 @@ func daemonArgsFromCliArgs(sessionKey string, cliArgs []string) []string {
 		return args
 	}
 	if len(cliArgs) >= 2 && cliArgs[0] == "live" {
-		return append(args, "live", cliArgs[1])
+		return append(args, cliArgs...)
+	}
+	if len(cliArgs) == 5 && cliArgs[0] == "live-cdp" {
+		return append(args,
+			"--live-origin", cliArgs[1],
+			"--live-cdp-endpoint", cliArgs[2],
+			"--live-cdp-target", cliArgs[3],
+			"--live-cdp-target-fallback", cliArgs[4],
+		)
 	}
 	if len(cliArgs) >= 2 && cliArgs[0] == "preview" {
 		return append(args, "preview", cliArgs[1])

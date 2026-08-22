@@ -502,3 +502,28 @@ body.hide-resolved .crit-live-comment-row-wrap:has(.resolved-card) {
   outline-offset: 2px;
   border-radius: 4px;
 }
+.crit-live-detached-frame {
+  display: grid;
+  place-items: center;
+  min-width: 360px;
+  min-height: 260px;
+}
+
+.crit-live-detached-notice {
+  display: grid;
+  gap: 10px;
+  max-width: 420px;
+  padding: 28px;
+  text-align: center;
+  color: var(--crit-fg-secondary);
+}
+
+.crit-live-detached-notice strong {
+  color: var(--crit-fg-primary);
+  font-size: 18px;
+}
+
+.crit-live-detached-notice code {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}

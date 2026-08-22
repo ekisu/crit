@@ -179,6 +179,12 @@ type liveCLIFlags struct {
 	cookieFlags                 stringSliceFlag
 	cookieFile                  string
 	cdpURL                      string
+	attachCDP                   string
+	target                      string
+	selectedTargetTitle         string
+	selectedTargetID            string
+	cdpWebSocket                string
+	sessionKey                  string
 	origin                      string
 }
 
@@ -197,6 +203,8 @@ func parseLiveCLIFlags(args []string) liveCLIFlags {
 	fs.Var(&cookieFlags, "cookie", "Cookie header value for upstream requests (repeatable)")
 	cookieFile := fs.String("cookie-file", "", "File with upstream cookies (raw header or Netscape jar)")
 	cdpURL := fs.String("cdp-url", "", "Chrome DevTools URL (e.g. http://127.0.0.1:9222) to reuse browser cookies")
+	attachCDP := fs.String("attach-cdp", "", "Attach to an existing Chrome/Electron DevTools endpoint")
+	target := fs.String("target", "", "Page target title, URL, or ID substring for --attach-cdp")
 	// Keep in sync with the fs.Bool/fs.BoolVar registrations above.
 	args = clicmd.ReorderFlagsFirst(args, map[string]bool{
 		config.AllowUnauthenticatedNetworkFlag: true,
@@ -213,17 +221,21 @@ func parseLiveCLIFlags(args []string) liveCLIFlags {
 			break
 		}
 	}
-	if rawURL == "" {
+	if rawURL == "" && *attachCDP == "" {
 		fmt.Fprintln(os.Stderr, "Usage: crit live <url>")
 		os.Exit(1)
 	}
-	u, err := url.Parse(rawURL)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
-		fmt.Fprintf(os.Stderr, "crit live: %q is not a valid http/https URL\n", rawURL)
-		os.Exit(1)
+	origin := ""
+	if rawURL != "" {
+		u, err := url.Parse(rawURL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+			fmt.Fprintf(os.Stderr, "crit live: %q is not a valid http/https URL\n", rawURL)
+			os.Exit(1)
+		}
+		u.RawQuery = ""
+		u.Fragment = ""
+		origin = strings.TrimSuffix(u.String(), "/")
 	}
-	u.RawQuery = ""
-	u.Fragment = ""
 	return liveCLIFlags{
 		port:                        *port,
 		host:                        *host,
@@ -235,12 +247,23 @@ func parseLiveCLIFlags(args []string) liveCLIFlags {
 		cookieFlags:                 cookieFlags,
 		cookieFile:                  *cookieFile,
 		cdpURL:                      *cdpURL,
-		origin:                      strings.TrimSuffix(u.String(), "/"),
+		attachCDP:                   *attachCDP,
+		target:                      *target,
+		origin:                      origin,
 	}
 }
 
 func buildLiveDaemonArgs(origin, liveCookies string, f liveCLIFlags, cfg config.Config, noOpenResolved bool) []string {
 	daemonArgs := []string{"--live-origin", origin}
+	if f.cdpWebSocket != "" {
+		daemonArgs = append(daemonArgs, "--live-cdp-websocket", f.cdpWebSocket)
+		daemonArgs = append(daemonArgs, "--live-cdp-endpoint", normalizeCDPBaseURL(f.attachCDP))
+		daemonArgs = append(daemonArgs, "--live-cdp-target", f.selectedTargetID)
+		daemonArgs = append(daemonArgs, "--live-cdp-target-fallback", f.selectedTargetTitle)
+	}
+	if f.sessionKey != "" {
+		daemonArgs = append(daemonArgs, "--session-key", f.sessionKey)
+	}
 	if liveCookies != "" {
 		daemonArgs = append(daemonArgs, "--live-cookie", liveCookies)
 	}
@@ -258,6 +281,20 @@ func buildLiveDaemonArgs(origin, liveCookies string, f liveCLIFlags, cfg config.
 // RunLive starts a live-mode review of a running web app.
 func RunLive(args []string) {
 	f := parseLiveCLIFlags(args)
+	if f.attachCDP != "" {
+		target, err := SelectCDPPageTarget(context.Background(), f.attachCDP, f.target)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		f.origin = target.URL
+		f.cdpWebSocket = target.WebSocketDebuggerURL
+		f.selectedTargetTitle = target.Title
+		f.selectedTargetID = target.ID
+		if !f.quiet {
+			fmt.Fprintf(os.Stderr, "[crit] attaching to %s (%s)\n", target.Title, target.URL)
+		}
+	}
 
 	cwd, err := daemon.ResolvedCWD()
 	if err != nil {
@@ -265,20 +302,27 @@ func RunLive(args []string) {
 		os.Exit(1)
 	}
 	cfg := config.LoadConfig(cwd)
-	key := daemon.LiveSessionKey(cwd, f.origin)
+	sessionOrigin := f.origin
+	if f.cdpWebSocket != "" {
+		sessionOrigin = "cdp:" + normalizeCDPBaseURL(f.attachCDP) + "#" + f.selectedTargetID
+	}
+	key := daemon.LiveSessionKey(cwd, sessionOrigin)
+	f.sessionKey = key
 	noOpenResolved := f.noOpen || cfg.NoOpen
 	quiet := f.quiet || cfg.Quiet
 	if connectToLiveDaemon(key, noOpenResolved, cfg.OpenCmd, quiet) {
 		return
 	}
 
-	liveCookies, err := resolveLiveCookiesWithCDP(context.Background(), f.cookieFlags, f.cookieFile, f.cdpURL, cfg, cwd, f.origin)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+	liveCookies := ""
+	if f.cdpWebSocket == "" {
+		liveCookies, err = resolveLiveCookiesWithCDP(context.Background(), f.cookieFlags, f.cookieFile, f.cdpURL, cfg, cwd, f.origin)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		checkLiveSmoke(f.origin, liveCookies)
 	}
-
-	checkLiveSmoke(f.origin, liveCookies)
 
 	if connectToLiveDaemon(key, noOpenResolved, cfg.OpenCmd, quiet) {
 		return
@@ -291,8 +335,12 @@ func RunLive(args []string) {
 	}
 
 	if !quiet {
-		fmt.Fprintf(os.Stderr, "[crit] starting daemon on :%d (api), :%d (proxy)\n",
-			entry.Port, entry.Port+1)
+		if f.cdpWebSocket != "" {
+			fmt.Fprintf(os.Stderr, "[crit] starting daemon on :%d (api, CDP attached)\n", entry.Port)
+		} else {
+			fmt.Fprintf(os.Stderr, "[crit] starting daemon on :%d (api), :%d (proxy)\n",
+				entry.Port, entry.Port+1)
+		}
 		fmt.Fprintf(os.Stderr, "[crit] open %s/live\n", entry.BaseURL())
 	}
 

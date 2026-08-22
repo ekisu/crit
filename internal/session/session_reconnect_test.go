@@ -545,6 +545,7 @@ func TestDaemonArgsFromCliArgs(t *testing.T) {
 		{"pr", []string{"pr:42"}, []string{"--session-key", key, "--quiet", "--pr", "42"}},
 		{"range", []string{"range:abc..def"}, []string{"--session-key", key, "--quiet", "--range", "abc..def"}},
 		{"live", []string{"live", "http://localhost:3000"}, []string{"--session-key", key, "--quiet", "live", "http://localhost:3000"}},
+		{"live CDP", []string{"live-cdp", "file:///app/index.html", "http://127.0.0.1:9315", "target-one", "Mapping Tools"}, []string{"--session-key", key, "--quiet", "--live-origin", "file:///app/index.html", "--live-cdp-endpoint", "http://127.0.0.1:9315", "--live-cdp-target", "target-one", "--live-cdp-target-fallback", "Mapping Tools"}},
 		{"preview", []string{"preview", "/tmp/x.html"}, []string{"--session-key", key, "--quiet", "preview", "/tmp/x.html"}},
 	}
 	for _, tc := range tests {

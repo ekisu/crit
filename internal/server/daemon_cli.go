@@ -50,6 +50,10 @@ type DaemonCLIConfig struct {
 	RemoteFiles                 bool
 	LiveOrigin                  string
 	LiveCookie                  string
+	LiveCDPWebSocket            string
+	LiveCDPEndpoint             string
+	LiveCDPTarget               string
+	LiveCDPTargetFallback       string
 	PreviewFile                 string
 	SessionID                   string // user-facing reconnect ID from --session
 	SessionKeyOverride          string // internal: force session registry key in _serve
@@ -79,6 +83,10 @@ type daemonFlagSet struct {
 	remoteFiles                 bool
 	liveOrigin                  string
 	liveCookie                  string
+	liveCDPWebSocket            string
+	liveCDPEndpoint             string
+	liveCDPTarget               string
+	liveCDPTargetFallback       string
 	previewFile                 string
 	sessionID                   string
 	sessionKeyOverride          string
@@ -125,6 +133,10 @@ func parseDaemonFlags(args []string) daemonFlagSet {
 	remoteFiles := fs.Bool("remote", false, "Read PR/MR file content through the selected forge API")
 	liveOrigin := fs.String("live-origin", "", "")
 	liveCookie := fs.String("live-cookie", "", "")
+	liveCDPWebSocket := fs.String("live-cdp-websocket", "", "")
+	liveCDPEndpoint := fs.String("live-cdp-endpoint", "", "")
+	liveCDPTarget := fs.String("live-cdp-target", "", "")
+	liveCDPTargetFallback := fs.String("live-cdp-target-fallback", "", "")
 	previewFile := fs.String("preview-file", "", "")
 	sessionID := fs.String("session", "", "Reconnect to an existing review session by ID")
 	sessionKeyOverride := fs.String("session-key", "", "")
@@ -169,6 +181,10 @@ func parseDaemonFlags(args []string) daemonFlagSet {
 		remoteFiles:                 *remoteFiles,
 		liveOrigin:                  *liveOrigin,
 		liveCookie:                  *liveCookie,
+		liveCDPWebSocket:            *liveCDPWebSocket,
+		liveCDPEndpoint:             *liveCDPEndpoint,
+		liveCDPTarget:               *liveCDPTarget,
+		liveCDPTargetFallback:       *liveCDPTargetFallback,
 		previewFile:                 *previewFile,
 		sessionID:                   *sessionID,
 		sessionKeyOverride:          *sessionKeyOverride,
@@ -299,6 +315,10 @@ func ResolveDaemonCLIConfig(args []string) (*DaemonCLIConfig, error) {
 		RemoteFiles:                 remoteFiles,
 		LiveOrigin:                  sf.liveOrigin,
 		LiveCookie:                  sf.liveCookie,
+		LiveCDPWebSocket:            sf.liveCDPWebSocket,
+		LiveCDPEndpoint:             sf.liveCDPEndpoint,
+		LiveCDPTarget:               sf.liveCDPTarget,
+		LiveCDPTargetFallback:       sf.liveCDPTargetFallback,
 		PreviewFile:                 sf.previewFile,
 		SessionID:                   sf.sessionID,
 		SessionKeyOverride:          sf.sessionKeyOverride,
